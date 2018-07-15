@@ -1,0 +1,386 @@
+---
+title: "Temp Access Abuse Analysis"
+author: "Marketing Analytics"
+date: "July 10, 2017"
+output:
+  html_document:
+    depth: 3
+    highlight: tango
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+geometry: margin=0.5in
+fontsize: 11pt
+---
+```{r Code Block 1,results='hide',include=FALSE}
+require(CengageFunctions)
+require(knitr)
+require(readr)
+require(dplyr)
+require(tidyr)
+require(stringr)
+require(ggplot2)
+require(lubridate)
+require(scales)
+require(cowplot)
+require(gridExtra)
+require(RColorBrewer)
+require(knitr)
+
+
+load("C:/Users/babbenante/OneDrive - Cengage Learning/Documents/rawdata/TrialAbuseUsageData.RData")
+
+
+# TrialAbuseData.raw <- read_delim("~/../..rawdata/TrialAbuseData.txt"
+#                              ,"\t"
+#                              , escape_double = FALSE
+#                              , col_types = cols(ACADEMIC_YEAR = col_character())
+#                              , trim_ws = TRUE)
+# 
+# #rename some columns to be friendlier
+# TrialAbuseData<-TrialAbuseData.raw %>% 
+#   rename(greater_than_90_perc_count=`more_than_90%`
+#          ,greater_than_80_perc_count=`more_than_80%`
+#          ,greater_than_70_perc_count=`more_than_70%`
+#          ,greater_than_60_perc_count=`more_than_60%`) %>% 
+#   mutate(perc_share_90=greater_than_90_perc_count/TOTAL_STUDENTS
+#          ,perc_share_80=greater_than_80_perc_count/TOTAL_STUDENTS
+#          ,perc_share_70=greater_than_70_perc_count/TOTAL_STUDENTS
+#          ,perc_share_60=greater_than_60_perc_count/TOTAL_STUDENTS
+#          ,Term=ifelse(ACADEMIC_TERM=="Winter","Wi",
+#                      ifelse(ACADEMIC_TERM=="Spring","Sp","Fa"))) %>%
+#   mutate(YearTerm=paste0(ACADEMIC_YEAR,"_",Term)) %>% 
+#   mutate(YearTerm=factor(YearTerm,levels=c("2015_Wi", "2015_Sp","2015_Fa","2016_Wi", "2016_Sp","2016_Fa","2017_Wi","2017_Sp")))
+
+```
+<style type="text/css">
+p.caption
+{
+float:right; 
+margin: auto;
+padding:2px; 
+clear:both;
+}
+</style>
+#Executive Summary
+
+Student's taking advantage of the temp access period could potentially be costing Cengage considerable revenue.  In this analysis, MindTap usage data from the Winter 2015 through the Fall 2017 terms was analyzed to garner insights into the potential level of abuse, and what impact - if any - that has on a student's likelihood to purchase. 
+
+In the context of this report, "Abuse"" is defined as completing an inordinate amount of gradable assignments in the temp access period.  The original analysis used 90% as the defined threshold; a more fluid interpretation of the threshold has been adopted for this analysis.  Comparing the distributions of activity completion in the temp access window between non-paying and paying students, the aggregate delta between the two cohorts for completion percentage over 50% is considered to calculate the potential lost paying student population. That is, assuming the increase in non-paying students who complete over 50% of the assignments in the temp access period vs. paying students.  A standard window of two weeks has been used as temp access period for all courses.
+
+After reviewing there does not seem to be an appreciable increase in 'gaming of the system' rate year over year.  However, while the percentage of potential abusers is not large, the sheer volume shows a potential loss of ~ $200,000 in revenue for the Fall 2017 term.  Due to the significance of this potential monetary impact, Marketing will work with the product team to limit students’ ability to complete the majority of assignments during temp access period.
+
+
+#Data Exploration
+
+```{r Code Block 2, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left; margin: auto;padding:3px; clear:both; "'}
+
+
+#graph students by term
+fig1<-CourseUsage %>% 
+  group_by(YearTerm) %>% 
+  filter(YearTerm!='Fa_17') %>% 
+  summarise(Students=sum(Students.x)) %>% 
+  ggplot(aes(x=YearTerm,y=Students)) +
+  geom_bar(stat='identity',fill="#063961") +
+  cengage_fte_theme() +
+#  scale_fill_manual(values=cengage_color_palette(1,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Students per Term", x="Term", y="Disciplines") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+#graph courses by term
+fig2<-CourseSummary %>% 
+  group_by(YearTerm) %>%
+  filter(YearTerm!='Fa_17') %>% 
+  summarise(Course=length(unique(COURSEID))) %>% 
+  ggplot(aes(x=YearTerm,y=Course)) +
+  geom_bar(stat='identity',fill="#063961") +
+  cengage_fte_theme() +
+#  scale_fill_manual(values=cengage_color_palette(1,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Courses per Term", x="Term", y="Courses") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom')
+
+plot_grid(fig1
+          ,NULL
+          ,fig2
+          ,labels=c("fig 1", "", "fig 2")
+          ,label_size=8
+          ,rel_widths = c(4,1,4)
+          , vjust=40
+          ,ncol = 3
+          , nrow = 1)
+
+```
+
+A data extract of weekly student course level details for each term since Winter of 2016 was included in the analysis.  The details of each record include course, week identifier and term descriptions, as well as counts of activities completed.  An indicator of paid or not paid is included for each student, as well as counts of total assignments at the course level.  While temp access period for shorter courses is calculated in days dependent on weeks in the course, sub-weekly data is not available - which is why the two week temp access length has been uniformly chosen.
+
+Figures 1 & 2 show the distinct counts of Students and Courses per term.  Figure 3 shows the distribution of courses by length in weeks. Figure four shows counts of courses by number of assignments per course.  Figures 3 and 4 are truncated to eliminate the long tail, as there are a handful of course that extend well beyond the range represented, but account for a small enough portion as not to affect the general trend shown.
+
+
+```{r Code Block 3, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left; margin: auto;padding:3px; clear:both; "'}
+
+#graph courses by length
+fig1<-CourseSummary %>% 
+  filter(CourseWeeks<=25) %>% 
+  group_by(CourseWeeks) %>% 
+  summarise(Courses=n()) %>% 
+  ggplot(aes(x=CourseWeeks,y=Courses)) +
+  geom_bar(stat='identity',fill="#063961") +
+  cengage_fte_theme() +
+#  scale_fill_manual(values=cengage_color_palette(1,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Courses by Course Length (weeks)", x="Weeks", y="Courses") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom')
+
+#graph courses by # assignments
+fig2<-CourseSummary %>% 
+  filter(CourseWeeks<=25 & AssignedActivities<=40) %>% 
+#  group_by(AssignedActivities) %>% 
+#  summarise(Courses=n()) %>% 
+  ggplot(aes(AssignedActivities)) +
+  geom_histogram(stat='bin',fill="#063961",binwidth = 1) +
+  cengage_fte_theme() +
+#  scale_fill_manual(values=cengage_color_palette(1,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Courses by Number of Course Assignments", x="Courses", y="Assignments") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom')
+
+plot_grid(fig1
+          ,NULL
+          ,fig2
+          ,labels=c("fig 3", "", "fig 4")
+          ,label_size=8
+          ,rel_widths = c(4,1,4)
+          , vjust=40
+          ,ncol = 3
+          , nrow = 1)
+
+
+
+```
+
+Figures 5 show the average percent of total assignments completed in the temp access period, by length of course.  The color coding represents Paid vs. Non-Paid students.  Some observations of note - for all courses the average temp access course completion rate is greater for Non-Paid students than Paid students.  However, the largest discrepancy occurs in courses less than 3 weeks.  As mentioned earlier, the temp access length for these courses should be calculated in days vs. weeks, but that level of detail is not currently available.
+
+
+```{r Code Block 13, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:right; margin: auto;padding:2px; clear:both; "'}
+fig1<-CourseUsage %>% 
+  filter(CourseWeeks<=25) %>% 
+  mutate(avgCompletion=avgTwoWeekActivites/TotalActivites) %>% 
+  ggplot(aes(CourseWeeks,avgCompletion)) +
+  geom_bar(aes(fill=isPaid),stat='summary',fun.y='mean',position='dodge') +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(2,2))+
+  scale_y_continuous(labels=percent)+
+  labs(title="Share of Courses Completed In First Two Weeks by Length of Course", x="Course Length (Weeks)", y="Percent Course Completed") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+plot_grid(NULL
+          ,fig1
+          ,NULL
+          ,labels=c("","fig 5","")
+          ,label_size=8
+          , vjust=40
+          ,rel_widths = c(1,4,1)
+          ,ncol = 3
+          , nrow = 1)
+
+
+```
+
+#Data Analysis
+
+Looking at the most recent eight terms, there are indications of a seasonal trend with a spike in potential abusive behavior in spring, before returning to lower levels in the fall and winter terms.  This is likely a function of fewer students/courses in the spring vs other terms, but further exploration could reveal other causes.
+
+Figure six shows the upper deciles of course completion percentage in the temp access period by term.  Excluding the spring term, the 60-70% values generally fall in the teen range, while the median value are 0%.  It's not until the 95% percentile that values start to approach or exceed 50%.  In other words, less than 5-10% of students approach the most lenient definition of potential fraudulent behavior.
+```{r Code Block 15,echo=FALSE,message=FALSE, warning=FALSE,results='asis'}
+results.df<-UsagebyStudent %>% 
+  group_by(YearTerm) %>% 
+  filter(YearTerm!='Fa_17') %>% 
+  summarise(percent.50=percent(quantile(TwoWeekShare,probs=.5))
+            ,percent.60=percent(quantile(TwoWeekShare,probs=.6))
+            ,percent.70=percent(quantile(TwoWeekShare,probs=.7))
+            ,percent.80=percent(quantile(TwoWeekShare,probs=.8))
+            ,percent.90=percent(quantile(TwoWeekShare,probs=.9))
+            ,percent.95=percent(quantile(TwoWeekShare,probs=.95)))
+
+
+kable(results.df,caption='fig 6',col.names = c('Term','50% Percentile','60% Percentile','70% Percentile','80% Percentile', '90% Percentile', '95% Percentile'))
+
+#get the density of non paying students
+my.den.non<-density(UsagebyStudent[which(UsagebyStudent$isPaid=="NonPayingStudents" & UsagebyStudent$CourseWeeksCalc>2 & UsagebyStudent$CourseWeeksCalc<=25),]$TwoWeekShare)
+#get the density of paying students
+my.den.pd<-density(UsagebyStudent[which(UsagebyStudent$isPaid=="PayingStudents" & UsagebyStudent$CourseWeeksCalc>2 & UsagebyStudent$CourseWeeksCalc<=25),]$TwoWeekShare)
+#calc the area difference.  256 ~ roughly 50%, 477 ~ 100% (not sure on what the overage accounts for - likely a data integrity issue)
+inc.student.area<-sum(my.den.non$y[256:477]-my.den.pd$y[256:477])/2*.01
+
+#get the total count of students in courses > 2 weeks in fall 2016
+curr.stud.pop<-CourseUsage %>% 
+  filter(YearTerm=='Fa_16' & CourseWeeks>=6) %>% 
+  group_by(YearTerm) %>% 
+  summarise(tot.students=sum(Students.x)) %>% 
+  .$tot.students
+
+fcast.stud.pop<-round(curr.stud.pop*1.15,0)
+
+fcast.cohort<-round(fcast.stud.pop*.1,0)
+
+fcast.incremental<-round(fcast.cohort*inc.student.area,0)
+
+lower.bound.exposure<-fcast.incremental*0.6*100
+upper.bound.exposure<-fcast.incremental*0.8*100
+  
+
+```
+
+<br style="clear:both" />
+
+Finally, the distribution of total completed activities and temp access period completed activities - segmented by Paying and Non-Paying students - can be seen in figures 7 & 8.  As would be expected, Paying students have a higher total completion rate over the total course length.  Figure 8 shows that in the temp access period, once the percentage moves past 50% the Non-Paying students outnumber Paying students consistently until 100% is reached.  While the volume is low, it is an established trend, and this is the are where the potential loss will be judged.
+
+Using 50% as the lower limit, the difference in area between the Non-Paying and Paying students is calculated.  Only courses with a calculated length between 6 and 25 weeks were considered.  The aggregated difference in this area comes to + 5.54% for Non-Paying students.  Assuming an increase of 15% in total students from Fall 2016 (`r comma(curr.stud.pop)`) to Fall 2017, there is a potential student base of `r comma(fcast.stud.pop)`.  Using the deciles from figure 7, we assume 10% complete at least 50% of assignments in the first two weeks (`r comma(fcast.cohort)`).  Using the calculated delta, the incremental number of students in this Non-Paying cohort is `r comma(fcast.incremental)` vs the Paying cohort.  Assuming a conversion to paid between 60-80% - and average course value of $100, this results in a potential loss revenue range of `r dollar(lower.bound.exposure)` - `r dollar(upper.bound.exposure)`.  
+
+
+```{r Code Block 14, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left;margin: auto;padding:2px; clear:both; "'}
+
+#graph total activities completed by Paid/not paid
+fig1<-UsagebyStudent %>% 
+  ggplot(aes(TotalActivitiyCompletion)) +
+  geom_density(aes(fill=isPaid),alpha=0.75,adjust=5) +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(2,2))+
+  labs(title="Activities Completed by Paying/Not-Paying (Full Course)", x="Percent of Activities Completed During Course", y="Density") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+#graph  activities completed in first two weeks by Paid/not paid
+fig2<-UsagebyStudent %>% 
+  ggplot(aes(TwoWeekShare)) +
+  geom_density(aes(fill=isPaid),alpha=0.75,adjust=5) +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(2,2))+
+  labs(title="Activities Completed by Paying/Not-Paying (Two Weeks)", x="Percent of Activities Completed in First Two Weeks", y="Density") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+
+
+plot_grid(fig1
+          ,NULL
+          ,fig2
+          ,labels=c("fig 7", "", "fig 8")
+          ,label_size=8
+          ,rel_widths = c(4,1,4)
+          , vjust=40
+          ,ncol = 3
+          , nrow = 1)
+
+```
+
+<br style="clear:both" />
+
+#Conclusions
+
+There is a clearly noticeable difference in behavior of Paying and Not-Paying students with regards to activity completion.  There is also some noise in the data that is not accounted for in this analysis (particularly course with outliers in length, number of students, and total activities) - but most likely would not have a significant impact on the outcome.  
+
+Given the potential loss of revenue, an evaluation of the temp access period process is recommended.  Additionally, rerunning this analysis when the 2017 Fall term is completed to have a full three year window for all term seasons is recommended.
+
+#Appendix A - Supporting Data
+
+The data used in this analysis was retrieved from the cengage snowcloud instance (cengage.snowflakecomputing.com).  The query for retrieving the base data set is:
+
+select *
+from zpg.activities_per_week
+where hed_academicyear between 2015 and 2017;
+
+
+
+The code in this markdown file was pretransformed for expediency.  To perform/alter  the full analysis the following script should be used in place of the load statement in the first code block of the rmd file.
+
+```{r eval=FALSE}
+dim(iris
+my_db <- src_snowflakedb(user = "********",
+                         password = "**********",
+                         account = "cengage",
+                         opts = list(warehouse = "TEMP_WH",
+                                     db = "PROD",
+                                     schema = "ZPG"))
+
+
+abuse_data<-tbl.src_snowflakedb(my_db,"ACTIVITIES_PER_WEEK")
+
+b<-head(abuse_data)
+colnames(abuse_data)
+
+b<-filter(abuse_data,between(HED_ACADEMICYEAR,2015,2017))
+c<-collect(b)
+
+
+ActivityUsageData<-c
+ActivityUsageData$YearTerm<-paste0(ActivityUsageData$HED_ACADEMICTERMOFYEAR,'_',ActivityUsageData$HED_ACADEMICYEAR)
+ActivityUsageData$YearTerm=factor(ActivityUsageData$YearTerm,levels=c("Winter_2015", "Spring_2015","Fall_2015","Winter_2016", "Spring_2016","Fall_2016","Winter_2017","Spring_2017","Fall_2017"))
+ActivityUsageData$YearTerm<-fct_recode(ActivityUsageData$YearTerm,Wi_15='Winter_2015'
+                                       ,Sp_15='Spring_2015'
+                                       ,Fa_15='Fall_2015'
+                                       ,Wi_16='Winter_2016'
+                                       ,Sp_16='Spring_2016'
+                                       ,Fa_16='Fall_2016'
+                                       ,Wi_17='Winter_2017'
+                                       ,Sp_17='Spring_2017'
+                                       ,Fa_17='Fall_2017')
+
+
+GracePeriodWindow<-ActivityUsageData %>% 
+  filter(IN_GRACEPERIOD==1) %>% 
+  group_by(YearTerm,COURSEID) %>% 
+  summarise(EndGracePeriod=max(WEEK_OF_COURSE))
+
+CourseSummary<-ActivityUsageData %>% 
+  group_by(YearTerm,COURSEID) %>% 
+  summarise(Students=max(USERS_ON_COURSE)
+            ,CourseWeeks=max(WEEK_OF_COURSE)
+            ,TotalActivites=max(TOTAL_ACTIVITIES_IN_COURSE)
+            ,AssignedActivities=max(TOTAL_ASSIGNED_ACTIVITIES_IN_COURSE)) %>% 
+  inner_join(.,GracePeriodWindow,by=c('YearTerm','COURSEID')) %>% 
+  mutate(GracePeriodPercent=EndGracePeriod/CourseWeeks)
+
+UsagebyStudent<-ActivityUsageData %>% 
+  mutate(CourseWeeksCalc=ceiling(DAYS_IN_COURSE/7)) %>% 
+  group_by(YearTerm,COURSEID,PARTYID) %>% 
+  summarise(ACTIVATED=max(ACTIVATED)
+            ,PAID=max(PAID)
+            ,GracePeriodActivities=sum(ASSIGNED_ACTIVITIES_COMPLETED_BY_STUDENT_IN_GRACEPERIOD)
+            ,TwoWeekActivities=sum(ASSIGNED_ACTIVITIES_COMPLETED_BY_STUDENT[WEEK_OF_COURSE<=2])
+            ,TotalActivities=sum(ASSIGNED_ACTIVITIES_COMPLETED_BY_STUDENT)
+            ,AssignedActivities=max(TOTAL_ASSIGNED_ACTIVITIES_IN_COURSE)
+            ,TotalActivitiyCompletion=TotalActivities/AssignedActivities
+            ,GracePeriodShare=GracePeriodActivities/AssignedActivities
+            ,TwoWeekShare=TwoWeekActivities/AssignedActivities
+            ,CourseWeeks=max(WEEK_OF_COURSE)
+            ,CourseWeeksCalc=max(CourseWeeksCalc))
+
+CourseUsage<-UsagebyStudent %>% 
+  group_by(YearTerm,COURSEID,PAID) %>% 
+  summarise(Students=n()
+            ,avgTwoWeekActivites=mean(TwoWeekActivities)
+            ,medTwoWeekActivities=median(TwoWeekActivities)) %>% 
+  inner_join(.,CourseSummary,by=c('YearTerm','COURSEID'))
+CourseUsage$isPaid<-factor(CourseUsage$PAID)
+CourseUsage$isPaid<-fct_recode(CourseUsage$isPaid,NonPayingStudents='0',PayingStudents='1')
+
+UsageSummarybyStudent<-UsagebyStudent %>% 
+  group_by(YearTerm,COURSEID,PAID) %>% 
+  summarise(ACTIVATED=sum(ACTIVATED)
+            ,avgGracePeriodActivities=mean(GracePeriodActivities)
+            ,medGracePeriodActivites=median(GracePeriodActivities)
+            ,avgTotalActivities=mean(TotalActivities)
+            ,medTotalActivities=median(TotalActivities)
+            ,avgGracePeriodShare=mean(GracePeriodShare)
+            ,medGracePeriodShare=median(GracePeriodShare))
+
+#convert paid indicator to factor
+UsagebyStudent$isPaid<-factor(UsagebyStudent$PAID)
+UsagebyStudent$isPaid<-fct_recode(UsagebyStudent$isPaid,NonPayingStudents='0',PayingStudents='1')
+```
+

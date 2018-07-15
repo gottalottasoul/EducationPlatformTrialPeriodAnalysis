@@ -1,0 +1,288 @@
+---
+title: "Trial Abuse Analysis"
+author: "Marketing Analytics"
+date: "June 6, 2017"
+output:
+  html_document:
+    depth: 3
+    highlight: tango
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+geometry: margin=0.5in
+fontsize: 11pt
+---
+```{r Code Block 1,results='hide',include=FALSE}
+require(CengageFunctions)
+require(knitr)
+require(readr)
+require(dplyr)
+require(tidyr)
+require(stringr)
+require(ggplot2)
+require(lubridate)
+require(scales)
+require(cowplot)
+require(gridExtra)
+require(RColorBrewer)
+require(knitr)
+
+
+
+TrialAbuseData.raw <- read_delim("~/rawdata/TrialAbuseData.txt"
+                             ,"\t"
+                             , escape_double = FALSE
+                             , col_types = cols(ACADEMIC_YEAR = col_character())
+                             , trim_ws = TRUE)
+
+#rename some columns to be friendlier
+TrialAbuseData<-TrialAbuseData.raw %>% 
+  rename(greater_than_90_perc_count=`more_than_90%`
+         ,greater_than_80_perc_count=`more_than_80%`
+         ,greater_than_70_perc_count=`more_than_70%`
+         ,greater_than_60_perc_count=`more_than_60%`) %>% 
+  mutate(perc_share_90=greater_than_90_perc_count/TOTAL_STUDENTS
+         ,perc_share_80=greater_than_80_perc_count/TOTAL_STUDENTS
+         ,perc_share_70=greater_than_70_perc_count/TOTAL_STUDENTS
+         ,perc_share_60=greater_than_60_perc_count/TOTAL_STUDENTS
+         ,Term=ifelse(ACADEMIC_TERM=="Winter","Wi",
+                     ifelse(ACADEMIC_TERM=="Spring","Sp","Fa"))) %>%
+  mutate(YearTerm=paste0(ACADEMIC_YEAR,"_",Term)) %>% 
+  mutate(YearTerm=factor(YearTerm,levels=c("2015_Wi", "2015_Sp","2015_Fa","2016_Wi", "2016_Sp","2016_Fa","2017_Wi","2017_Sp")))
+
+```
+<style type="text/css">
+p.caption
+{
+float:right; 
+margin: auto;
+padding:2px; 
+clear:both;
+}
+</style>
+#Executive Summary
+
+This is an analysis of potential Trial Abuse of the Cengage MindTap App. In the context of this report, "Abuse"" is defined as completing an inordinate amount of gradeable assignments in the temp access period.  The original analysis used 90% as the defined threshold; this analysis considers four threshold levels, between 60-90%.  Additionally, the definition of temp access has shifted between the original analysis and this appended analysis - as of Spring 2017 the temp access period is 2 weeks.
+
+After reviewing there does not seem to be an appreciable increase in 'gaming of the system'.  There is a noticeable seasonal trend, but YoY term changes are nominal and within the bounds of acceptable variation, given the sample size.  As per John Curry's original analysis, I would recommend continuing to monitor, but there is no immediate concern or risk to activations.
+
+#Data Exploration
+
+```{r Code Block 2, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left; margin: auto;padding:3px; clear:both; "'}
+fig1<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(Disciplines=length(unique(DISCIPLINE))) %>% 
+  ggplot(aes(x=YearTerm,y=Disciplines,fill=YearTerm)) +
+  geom_bar(stat='identity') +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(5,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Disciplines per Term", x="Term", y="Disciplines") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+fig2<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(CourseArea=length(unique(COURSEAREA))) %>% 
+  ggplot(aes(x=YearTerm,y=CourseArea,fill=YearTerm)) +
+  geom_bar(stat='identity') +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(5,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Course Areas per Term", x="Term", y="Course Area") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+fig3<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(Students=sum(TOTAL_STUDENTS)) %>% 
+  ggplot(aes(x=YearTerm,y=Students,fill=YearTerm)) +
+  geom_bar(stat='identity') +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(5,2))+
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Students per Term", x="Term", y="Students") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+legend_b <- get_legend(fig1 + theme(legend.position="bottom"))
+
+prow<- plot_grid(fig1 + theme(legend.position="none")
+          ,fig2 + theme(legend.position="none")
+          ,fig3 + theme(legend.position="none")
+          ,labels=c("fig 1", "fig 2", "fig 3"),label_size=8, vjust=30,ncol = 3, nrow = 1)
+
+plot_grid( prow, legend_b, ncol = 1, rel_heights = c(1, .2))
+
+```
+
+A data extract of course level details for each term since Winter of 2016 was included in the analysis.  The details of each record include course and term descriptions, as well as counts of total students.  Counts of students exceeding 60, 70, 80 & 90% thresholds are included in the dataset as well.  "Threshold" is defined as the percentage of completed gradeable assignments within the trial period (2 weeks).
+
+Figures 1 & 2 show the distinct counts of Discipline and Course Area per term.  Figure 3 shows the aggregate student enrollment per term.  While Discipline and Course Area counts are fairly consistent term to term, there is a noticeable drop in Spring term student counts for both observed periods in the data set.  This potentially warrants further investigation.
+
+Figures 4 & 5 show data related to course length.  It is evident as course length approaches the more common lengths (>=8 weeks), the percentage of students in the course who exhibit potential abuse behavior beggins to flattens out, even at the most liberal defintion of abuse (60%).
+
+```{r Code Block 3, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left; margin: auto;padding:3px; clear:both; "'}
+fig1<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(MAX_WEEKS) %>% 
+  summarise(courses=n()
+            ,abuse=sum(greater_than_60_perc_count)/sum(TOTAL_STUDENTS)) %>% 
+  ggplot(aes(x=MAX_WEEKS,y=courses,fill=MAX_WEEKS)) +
+  geom_bar(stat='identity',fill="#063961") +
+  cengage_fte_theme() +
+  scale_y_continuous(labels=comma)+
+  labs(title="Count of Courses by Course Weeks", x="Course Length (Weeks)", y="Courses") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+fig2<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(MAX_WEEKS) %>% 
+  summarise(courses=n()
+            ,abuse=sum(greater_than_60_perc_count)/sum(TOTAL_STUDENTS)) %>% 
+  ggplot(aes(x=MAX_WEEKS,y=abuse,fill=MAX_WEEKS)) +
+  geom_bar(stat='identity',fill="#007db8") +
+  cengage_fte_theme() +
+  scale_y_continuous(labels=percent)+
+  labs(title="Percent Exceeding Threshold by Course Weeks", subtitle="60% Threshold", x="Course Length (Weeks)", y="% of Students") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+plot_grid(fig1
+          ,NULL
+          ,fig2
+          ,labels=c("fig 4", "", "fig 5")
+          ,label_size=8
+          ,rel_widths = c(4,1,4)
+          , vjust=40
+          ,ncol = 3
+          , nrow = 1)
+
+
+
+```
+
+
+
+
+#Data Analysis
+
+```{r Code Block 13, echo=FALSE, fig.width=8, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:right; margin: auto;padding:2px; clear:both; "'}
+fig1<-TrialAbuseData %>% 
+  filter(SEGMENT=="3week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(tot_perc_share_90=sum(perc_share_90)/sum(TOTAL_STUDENTS)
+            ,tot_perc_share_80=sum(perc_share_80)/sum(TOTAL_STUDENTS)
+            ,tot_perc_share_70=sum(perc_share_70)/sum(TOTAL_STUDENTS)
+            ,tot_perc_share_60=sum(perc_share_60)/sum(TOTAL_STUDENTS)) %>% 
+  gather(sensitivity_level,perc_share,tot_perc_share_90:tot_perc_share_60) %>% 
+#  filter(sensitivity_level=="tot_perc_share_90") %>% 
+  ggplot() +
+  geom_line(aes(x=YearTerm,y=perc_share,group=sensitivity_level,colour=sensitivity_level),size=1) +
+  cengage_fte_theme() +
+  scale_color_manual(values=cengage_color_palette(4,2))+
+  scale_y_continuous(labels=percent)+
+  labs(title="Share of Students/Course Potential Trial Abuse", x="Term", y="Percent of Students") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+plot_grid(fig1
+          ,labels=c("fig 6")
+          ,label_size=8
+          , vjust=40
+          ,ncol = 1
+          , nrow = 1)
+
+
+```
+
+Looking at the most recent five terms, there are indications of a seasonal trend with a spike in potential abusive behavior in spring, before returning to lower levels in the fall and winter terms.  This is evident across all threshold levels observed.
+
+Comparing like Terms year over year, there is minor variation and potential conflicting data from term to term.  For example, both Winter and Spring terms show a decline in total share growth at the 60% threshold level, as well as a decline in the Spring term at the 90% threshold level, but an increase in the Winter 90% threshold level. Given the high number of student counts, nearly all measurements meet generally acceptable levels of statistical significance. However, from a practical application standpoint, we are talking about hundredths of a percentage point difference.  The relevant percentages can be seen in the table below.
+
+```{r Code Block 15,echo=FALSE,message=FALSE, warning=FALSE,results='asis'}
+results.df<-TrialAbuseData %>% 
+  filter(SEGMENT=="3week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(tot_perc_share_90=percent(sum(perc_share_90)/sum(TOTAL_STUDENTS))
+            ,tot_perc_share_80=percent(sum(perc_share_80)/sum(TOTAL_STUDENTS))
+            ,tot_perc_share_70=percent(sum(perc_share_70)/sum(TOTAL_STUDENTS))
+            ,tot_perc_share_60=percent(sum(perc_share_60)/sum(TOTAL_STUDENTS)))
+
+results.df.contingency<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  group_by(YearTerm) %>% 
+  summarise(tot_perc_share_90=sum(greater_than_90_perc_count)
+            ,non_perc_share_90=sum(TOTAL_STUDENTS)-tot_perc_share_90
+            ,tot_perc_share_80=sum(greater_than_80_perc_count)
+            ,non_perc_share_80=sum(TOTAL_STUDENTS)-tot_perc_share_80
+            ,tot_perc_share_70=sum(greater_than_70_perc_count)
+            ,non_perc_share_70=sum(TOTAL_STUDENTS)-tot_perc_share_70
+            ,tot_perc_share_60=sum(greater_than_60_perc_count)
+            ,non_perc_share_60=sum(TOTAL_STUDENTS)-tot_perc_share_60)
+
+
+kable(results.df,caption='fig 7')
+```
+
+<br style="clear:both" />
+
+Finally, the distribution of potential abuse by individual course can be observed through a density distribution graph.  Figures 8 & 9 represent the total distribution, and distribution of courses that are at least 8 weeks in length, respectively.  The density distribution chart helps identify the makeup of the total population, and how it affects the aggregate abuse rate.  
+
+As can be seen in both charts, the majority of courses have a zero percent abuse rate - the distribution being ever more stark when the shorter courses are removed.  Unsurprisingly, as the threshold is lowered, the distribution expands and the count of zero potential abuser courses shrinks.    
+
+```{r Code Block 14, echo=FALSE, fig.width=10, fig.height=3.5, message=FALSE, warning=FALSE,out.extra='style="float:left;margin: auto;padding:2px; clear:both; "'}
+
+fig1<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new") %>% 
+  select(COURSEKEY,perc_share_90:perc_share_60) %>% 
+  gather(cohort,perc_share,perc_share_90:perc_share_60) %>% 
+  ggplot(.,aes(perc_share)) +
+  geom_density(aes(fill=cohort), alpha=0.75,adjust=5) +
+  xlim(0, .25) +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(4,2))+
+  labs(title="Distribution Density of Potential Trial Abuse", x="Percent of Class Achieving Threshold", y="Density") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+fig2<-TrialAbuseData %>% 
+  filter(SEGMENT=="2week" & DATASET=="new" & MAX_WEEKS>=8) %>% 
+  select(COURSEKEY,perc_share_90:perc_share_60) %>% 
+  gather(cohort,perc_share,perc_share_90:perc_share_60) %>% 
+  ggplot(.,aes(perc_share)) +
+  geom_density(aes(fill=cohort), alpha=0.75,adjust=5) +
+  xlim(0, .25) +
+  cengage_fte_theme() +
+  scale_fill_manual(values=cengage_color_palette(4,2))+
+  labs(title="Distribution Density of Potential Trial Abuse",subtitle="Class length >= 8 weeks"
+       ,x="Percent of Class Achieving Threshold", y="Density") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+
+plot_grid(fig1
+          ,NULL
+          ,fig2
+          ,labels=c("fig 8", "", "fig 9")
+          ,label_size=8
+          ,rel_widths = c(4,1,4)
+          , vjust=40
+          ,ncol = 3
+          , nrow = 1)
+
+```
+
+<br style="clear:both" />
+
+#Conclusions
+
+The shortened trial window - as well as the skewed potential abuse frequency towards courses 5 weeks and less - are the biggest factors in the flattening (or potential regression) of potential temp access abuse.  In the 2 terms where Year over Year data is available, there is a modest increase in potential temp access abuse for the Winter term at the 90% threshold (`r percent(as.numeric(sub("%","",results.df[4,2]))-as.numeric(sub("%","",results.df[1,2])))`).  The potential temp access abuse rate fell for the Fall term at the 90% threshold (`r percent(as.numeric(sub("%","",results.df[5,2]))-as.numeric(sub("%","",results.df[2,2])))`), as well as as both the Winter (`r percent(as.numeric(sub("%","",results.df[4,5]))-as.numeric(sub("%","",results.df[1,5])))`) and Fall (`r percent(as.numeric(sub("%","",results.df[5,5]))-as.numeric(sub("%","",results.df[2,5])))`) terms at the 60% threshold.  All four measures are within the average variance of the overall population - in other words any increase (or decrease) is likely due to random chance vs. a change in user behavior.  
+
+Given these factors, no immediate action is recommended.  A more thorough analysis framework for studying the pace of assignment completion would be useful for benchmarking and identification of abnormal behavior.  Continued monitoring for fluctuations in future terms should be implemented. 
+
+
+#Appendix A - Supporting Data
+
+The data used in this analysis can be found here:
+
+https://cengageo365-my.sharepoint.com/personal/blake_abbenante_cengage_com/_layouts/15/guestaccess.aspx?docid=1059c68974aff41edaad38bed3c58fe43&authkey=AaUre8P0rJqdprKXD6Ib8Ck
