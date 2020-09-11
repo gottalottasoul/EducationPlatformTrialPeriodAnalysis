@@ -83,12 +83,12 @@ install_version("dplyr", version = "0.4.3", repos = "http://cran.us.r-project.or
 options(dplyr.jdbc.classpath = "c:/users/babbenante/downloads/snowflake-jdbc-3.0.21.jar")
 options(java.parameters = "-Xmx8048m")
 
-my_db <- src_snowflakedb(user = "babbenante",
-                         password = "iD3DH27eNE4M",
-                         account = "cengage",
-                         opts = list(warehouse = "TEMP_WH",
-                                     db = "PROD",
-                                     schema = "ZPG"))
+my_db <- src_snowflakedb(user = "******",
+                         password = "******",
+                         account = "******",
+                         opts = list(warehouse = "******",
+                                     db = "******",
+                                     schema = "******"))
 
 
 abuse_data<-tbl.src_snowflakedb(my_db,"ACTIVITIES_PER_WEEK")
