@@ -114,15 +114,15 @@ setwd(here())
 options(dplyr.jdbc.classpath = "c:/users/babbenante/downloads/snowflake-jdbc-3.0.21.jar")
 options(java.parameters = "-Xmx8048m")
 
-snowflake_conn <- src_snowflakedb(user = "marketinganalytics@cengage.com",
-                         password = "vQvt$98ic*$ysbqTY6SN",
-                         account = "cengage",
-                         opts = list(warehouse = "TEMP_WH",
-                                     db = "PROD",
-                                     schema = "MARKETING_ANALYTICS"))
+snowflake_conn <- src_snowflakedb(user = "******",
+                         password = "******",
+                         account = "******",
+                         opts = list(warehouse = "******",
+                                     db = "******",
+                                     schema = "******"))
 
 
-datamart_conn<-odbcConnect("dwmadm01",uid="BABBENANTE",pwd="Bbab0217",believeNRows = FALSE)
+datamart_conn<-odbcConnect("******",uid="******",pwd="******",believeNRows = FALSE)
 course_data<-sqlQuery(datamart_conn,"select enr.course_key
                   ,enr.product_type
                   ,enr.course_name
